@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>WatchTogether – Co‑watching Made Easy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div class="app">
+        <header>
+            <h1>🎬 WatchTogether</h1>
+            <button id="createRoomBtn">Create Room</button>
+        </header>
+
+        <main>
+            <div class="url-bar">
+                <input id="urlInput" type="text" placeholder="Enter a URL to watch (e.g., https://example.com)" />
+                <button id="loadUrlBtn">Load</button>
+            </div>
+            <div class="iframe-wrapper">
+                <iframe id="sharedIframe" sandbox="allow-scripts allow-same-origin allow-popups" src=""></iframe>
+            </div>
+
+            <aside class="chat-panel">
+                <div id="chatLog" class="chat-log"></div>
+                <input id="chatInput" type="text" placeholder="Say something…" />
+                <button id="sendChatBtn">Send</button>
+            </aside>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+
+</html>

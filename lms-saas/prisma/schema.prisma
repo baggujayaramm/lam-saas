@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum Role {
+  SYSTEM_ADMIN
+  ORG_ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+}
+
+// ----------------------------------------------------------------------------
+// Core Models
+// ----------------------------------------------------------------------------
+
+model Organization {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  subdomain     String?        @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?      @db.Timestamp(6)
+  
+  users         User[]
+  memberships   Membership[]
+  sessions      Session[]
+  subscriptions Subscription[]
+  courses       Course[]
+  subjects      Subject[]
+  cohorts       Cohort[]
+  enrollments   Enrollment[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?    @db.Timestamp(6)
+  
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  memberships    Membership[]
+  sessions       Session[]
+  enrollments    Enrollment[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role         @default(STUDENT)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Session {
+  id               String       @id @default(cuid())
+  userId           String
+  organizationId   String
+  deviceInfo       String?
+  ipAddress        String?
+  refreshTokenHash String
+  revoked          Boolean      @default(false)
+  lastActiveAt     DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+
+  user             User         @relation(fields: [userId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Subscription {
+  id              String             @id @default(cuid())
+  organizationId  String
+  status          SubscriptionStatus @default(TRIAL)
+  trialStartDate  DateTime           @default(now())
+  trialEndDate    DateTime
+  seatLimit       Int                @default(10)
+  activeSeatCount Int                @default(1)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?          @db.Timestamp(6)
+
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// Educational Stubs
+// ----------------------------------------------------------------------------
+
+model Course {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?    @db.Timestamp(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  subjects       Subject[]
+  cohorts        Cohort[]
+
+  @@index([organizationId])
+}
+
+model Subject {
+  id             String       @id @default(cuid())
+  name           String
+  courseId       String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?    @db.Timestamp(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  course         Course       @relation(fields: [courseId], references: [id])
+
+  @@index([organizationId])
+  @@index([courseId])
+}
+
+model Cohort {
+  id             String       @id @default(cuid())
+  name           String
+  courseId       String
+  organizationId String
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?    @db.Timestamp(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  course         Course       @relation(fields: [courseId], references: [id])
+  enrollments    Enrollment[]
+
+  @@index([organizationId])
+  @@index([courseId])
+}
+
+model Enrollment {
+  id             String       @id @default(cuid())
+  userId         String
+  cohortId       String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?    @db.Timestamp(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  cohort         Cohort       @relation(fields: [cohortId], references: [id])
+
+  @@unique([userId, cohortId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([cohortId])
+}

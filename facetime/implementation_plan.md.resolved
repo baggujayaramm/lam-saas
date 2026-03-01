@@ -1,0 +1,85 @@
+# Phase 1 - Detailed Technical Blueprint
+
+Based on the rules set in [Gemini.md](file:///c:/Users/baggu/Antigravity/lms_saas/Gemini.md) and spec in [SPEC.md](file:///c:/Users/baggu/Antigravity/lms_saas/SPEC.md), this is the unified architectural implementation blueprint. 
+
+## User Review Required
+
+Please review the proposed architectural design, Prisma schema, token payloads, and API contracts.
+
+> [!IMPORTANT]
+> Since we're enforcing soft-delete and isolated multi-tenancy, it is best to enforce this dynamically via Prisma client extensions, middleware, or dedicated data-access services. For Phase 1, we will implement these as strict abstraction rules inside the `server/services/` layer, leaving the Prisma schema raw but mapping all access through secure methods.
+
+## Proposed Changes
+
+We will construct the project within the current `lms_saas` path.
+
+### 1. Database Schema Draft (`schema.prisma`)
+We will create a full robust Schema with `organizationId` and `deletedAt` scoping. Models:
+- `Organization` (`id`, `name`, `subdomain`, `deletedAt`)
+- `User` (`id`, `email`, `passwordHash`, `organizationId`, `deletedAt`)
+- `Membership` (`userId`, `organizationId`, `role` [SYSTEM_ADMIN, ORG_ADMIN, INSTRUCTOR, STUDENT])
+- `Session` (`id`, `userId`, `organizationId`, `deviceInfo`, `ipAddress`, `refreshTokenHash`, `revoked`, `lastActiveAt`, `createdAt`)
+- `Subscription` (`id`, `organizationId`, `status` [TRIAL, ACTIVE, EXPIRED], `trialStartDate`, `trialEndDate`, `seatLimit`, `activeSeatCount`, `deletedAt`)
+- Educational stubs containing `organizationId` & `deletedAt`: `Course`, `Subject`, `Cohort`, `Enrollment`.
+
+### 2. Authentication Token Structure
+**Access Token (JWT)**
+- `userId` (string)
+- `organizationId` (string)
+- `role` (enum string)
+- `tokenVersion` (int)
+- Expiry: 15 minutes
+- Passed: `HttpOnly` Secure Cookie (`access_token`)
+
+**Refresh Token (Opaque or standard JWT)**
+- Used to re-mint access token when expired.
+- Passed: `HttpOnly` Secure Cookie (`refresh_token`)
+- Revoked upon log-out or suspicious activity; rotation guarantees no replay attacks.
+
+### 3. Service Layer Contracts (`server/services/`)
+- `AuthService`: `login`, `signup`, `refresh`, `logout`, `verifyPassword`, `hashPassword`
+- `OrganizationService`: `createOrganizationWithTrial` (handles transaction: Org -> Subscription -> Admin User -> Membership)
+- `SessionService`: `createSession`, `revokeSession`, `rotateRefreshTokens`
+
+### 4. API Contracts (`app/api/auth/[action]/route.ts`)
+- `POST /api/auth/login`: Accepts JSON `{ email, password }`, sets HTTPOnly cookies.
+- `POST /api/auth/signup`: Accepts JSON `{ organizationName, email, password }`, creates org + user + trial, sets HTTPOnly cookies.
+- `POST /api/auth/refresh`: Reads secure cookie, validates with DB session table, rotates tokens, sets new cookies.
+- `POST /api/auth/logout`: Revokes session, deletes cookies.
+
+### 5. Middleware Design (`middleware.ts`)
+1. Extract `access_token` and `refresh_token` from cookies.
+2. If `access_token` valid => Map `req.user` details, permit.
+3. If specific protected route requires roles (e.g. `/dashboard`), assert role logic in middleware or Higher-Order Components.
+4. If Trial has expired, block arbitrary `POST/PUT/DELETE` methods returning a `403 Trial Expired` view-only constraint.
+
+### 6. Directory Structure
+```
+lms_saas/
+├── app/
+│   ├── (marketing)/
+│   │   ├── page.tsx
+│   │   └── pricing/page.tsx
+│   ├── (auth)/
+│   │   ├── login/page.tsx
+│   │   └── signup/page.tsx
+│   ├── (dashboard)/
+│   │   ├── org-admin/page.tsx
+│   │   └── system-admin/page.tsx
+│   └── api/
+├── components/
+│   ├── ui/
+│   └── layout/
+├── config/
+│   └── ui.config.ts
+├── lib/
+│   └── utils.ts
+└── server/
+    ├── services/
+    ├── repositories/
+    └── prisma/
+```
+
+## Verification Plan
+1. **Automated Tests**: A suite of HTTP tests targeting the API layer to assure authentication tokens minting, rotation, and CSRF protection. Prisma soft delete verifications.
+2. **Manual Verification**: Run landing page, execute full signup workflow, review Postgres tables for `Session` and `Subscription` trial, visually verify Dashboard redirection and UI tokens scaling to elements.
